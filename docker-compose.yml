@@ -1,0 +1,52 @@
+# Starts SecureDesk and its PostgreSQL database: `docker compose up --build`.
+# Values such as ${APP_KEY} are read from the .env file next to this one.
+
+services:
+  app:
+    build: .
+    image: securedesk:latest
+    ports:
+      - "8080:80"
+    environment:
+      APP_NAME: SecureDesk
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Set APP_KEY in .env (php artisan key:generate)}
+      APP_URL: http://localhost:8080
+      LOG_CHANNEL: stderr
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-securedesk}
+      DB_USERNAME: ${DB_USERNAME:-securedesk}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      HASH_DRIVER: argon2id
+      SESSION_DRIVER: database
+      SESSION_ENCRYPT: "true"
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    volumes:
+      - app-logs:/var/www/html/storage/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-securedesk}
+      POSTGRES_USER: ${DB_USERNAME:-securedesk}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql
+    # The database is not published on the host: only the app container can reach it.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  app-logs:
